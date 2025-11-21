@@ -43,7 +43,7 @@ def joinFactorsByVariableWithCallTracking(callTrackingList=None):
         # typecheck portion
         numVariableOnLeft = len([factor for factor in currentFactorsToJoin if joinVariable in factor.unconditionedVariables()])
         if numVariableOnLeft > 1:
-            print("Factor failed joinFactorsByVariable typecheck: ", factor)
+            print("Factor failed joinFactorsByVariable typecheck: ", factors)
             raise ValueError("The joinBy variable can only appear in one factor as an \nunconditioned variable. \n" +  
                                "joinVariable: " + str(joinVariable) + "\n" +
                                ", ".join(map(str, [factor.unconditionedVariables() for factor in currentFactorsToJoin])))
@@ -93,7 +93,7 @@ def joinFactors(factors: List[Factor]):
     if len(factors) > 1:
         intersect = functools.reduce(lambda x, y: x & y, setsOfUnconditioned)
         if len(intersect) > 0:
-            print("Factor failed joinFactors typecheck: ", factor)
+            print("Factor failed joinFactors typecheck: ", factors)
             raise ValueError("unconditionedVariables can only appear in one factor. \n"
                     + "unconditionedVariables: " + str(intersect) + 
                     "\nappear in more than one input factor.\n" + 
@@ -102,7 +102,38 @@ def joinFactors(factors: List[Factor]):
 
 
     "*** YOUR CODE HERE ***"
-    raiseNotDefined()
+    factors = list(factors)
+    
+    if not factors:
+        return None
+
+    # 1. collecting all variable sets
+    unconditioned = set()
+    conditioned = set()
+
+    for factor in factors:
+        unconditioned.update(factor.unconditionedVariables())
+        conditioned.update(factor.conditionedVariables())
+
+    # 2. determine correct classification for the new factor,if a variable is unconditioned input , it must be unconditioned in the output and not in conditioned.
+    newConditioned = conditioned - unconditioned
+
+    # 3. get domains
+    variableDomainsDict = factors[0].variableDomainsDict()
+
+    # 4. Initialize new factor
+    newFactor = Factor(unconditioned, newConditioned, variableDomainsDict)
+
+    # 5. Computing probabilities, getAllPossibleAssignmentDicts returns all combinations of the new factor's variables
+    for assignment in newFactor.getAllPossibleAssignmentDicts():
+        probability = 1.0
+        for factor in factors:
+            # getProbability ignores variables in 'assignment' not present in the factor
+            probability *= factor.getProbability(assignment)
+        
+        newFactor.setProbability(assignment, probability)
+
+    return newFactor
     "*** END YOUR CODE HERE ***"
 
 ########### ########### ###########
@@ -153,7 +184,36 @@ def eliminateWithCallTracking(callTrackingList=None):
                     "unconditionedVariables: " + str(factor.unconditionedVariables()))
 
         "*** YOUR CODE HERE ***"
-        raiseNotDefined()
+        # 1. Determine the new sets of variables, elimination variable removed from unconditioned variables
+        newUnconditioned = factor.unconditionedVariables()
+        newUnconditioned.remove(eliminationVariable)
+        
+        # Conditioned variables remain the same as the original factor
+        newConditioned = factor.conditionedVariables()
+        
+        # 2. Get variable domains (domains remain the same)
+        variableDomainsDict = factor.variableDomainsDict()
+
+        # 3. Initialize the new Factor
+        newFactor = Factor(newUnconditioned, newConditioned, variableDomainsDict)
+
+        # 4. Compute summed probabilities, iterate over every assignment in the new factor
+        for assignment in newFactor.getAllPossibleAssignmentDicts():
+            totalProb = 0.0
+            
+            # For assignment of the kept variables, we sum over all possible values of the eliminationVariable.
+            for value in variableDomainsDict[eliminationVariable]:
+                # Construct the full assignment dictionary for the original factor
+                oldAssignment = assignment.copy()
+                oldAssignment[eliminationVariable] = value
+                
+                # Add the probability from the original factor
+                totalProb += factor.getProbability(oldAssignment)
+            
+            # Set the summed probability in the new factor
+            newFactor.setProbability(assignment, totalProb)
+
+        return newFactor
         "*** END YOUR CODE HERE ***"
 
     return eliminate
